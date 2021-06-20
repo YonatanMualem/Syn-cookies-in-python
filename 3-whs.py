@@ -31,7 +31,8 @@ class PacketsOrginize(Thread):
         sniff(filter="tcp and dst port " + str(PORT), prn=self.PacketTransfer, store=0)
 
     def PacketTransfer(self, pkt):
-        connction = {"IP": pkt["IP"].dst, "SPORT": pkt["TCP"].SPORT}
+        connction = {"IP": pkt["IP"].src, "SPORT": pkt["TCP"].sport}
+        print(connction)
         # Check if the user already have a connection to the server
         if IP in pkt and connction in AcceptQueue.queue:
             # Send packet to start get data
@@ -42,14 +43,15 @@ class PacketsOrginize(Thread):
 
 
 class PacketSplitter(Thread):
+
     def __init__(self):
-        super().__init__()
+        super(PacketSplitter, self).__init__()
         # Queue for handle all wait for ack
         # [{"pkt:packet, time: time.time()},]
         self.SynList = []
         # Queue for handle all ACK packets
         self.AckQueue = Queue(1000)
-        Thread(target= self.SynQueue()).start()
+        Thread(target=self.SynQueue).start()
 
     def SYNACK_create(self, packet):
         '''
@@ -65,17 +67,21 @@ class PacketSplitter(Thread):
         # Create syn-ack packet with scapy
         synack = IP(dst=saddr) / TCP(sport=dport, dport=sport, flags="SA", seq=SeqNr, ack=AckNr)
         # Need ro send synack
-
+        send(synack)
         ACK = IP(dst=saddr) / TCP(sport=dport, dport=sport, flags="A", ack=SeqNr + 1)
 
         return {"pkt": ACK, "time": datetime.time}
-
 
     def run(self):
         '''
         Split between syn packets and ack packets
         :return: None
         '''
+
+
+
+
+
         while True:
             if not PacketFilter.empty():
                 packet = PacketFilter.get()
@@ -92,6 +98,8 @@ class PacketSplitter(Thread):
                     self.AckQueue.put(packet)
 
 
+    def TimeCheck(self, time):
+        datetime.time
     def SynQueue(self):
         '''
         Goes over all backlog to check 2 things:
@@ -114,6 +122,7 @@ class PacketSplitter(Thread):
                         CompleteConnection = {"IP": IP, "SPORT": SPORT}
                         # Add packet to Established connections
                         AcceptQueue.put(CompleteConnection)
+                        self.SynList.remove[packet]
                         print("Connection established!! \n ip:", IP + "\n port:", SPORT)
                         break
                     else:
@@ -127,8 +136,19 @@ class PacketSplitter(Thread):
 
 
 def main():
+    print("start")
     Port_RST_Drop()
+    print("start")
     server = PacketsOrginize()
-    server1 = PacketSplitter().__init__()
-    Thread(target=server).start()
-    Thread(target=server1).start()
+
+    print("start")
+    server1 = PacketSplitter()
+    server.__init__()
+    print("start")
+    server.start()
+    print("start")
+    server1.start()
+    print("start")
+
+
+main()

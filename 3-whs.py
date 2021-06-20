@@ -2,9 +2,10 @@ from scapy.all import *
 from queue import Queue
 from threading import Thread
 import os
-
+import datetime
 from scapy.layers.inet import IP, TCP
 
+MaxHalfConnection = 1500
 
 PacketFilter = Queue()
 AcceptQueue = Queue(1000)
@@ -44,15 +45,16 @@ class PacketSplitter(Thread):
     def __init__(self):
         super().__init__()
         # Queue for handle all wait for ack
-        self.SynQueue = Queue(1000)
+		# [{"pkt:packet, time: time.time()},]
+        self.SynList = []
         # Queue for handle all ACK packets
         self.AckQueue = Queue(1000)
 
     def SYNACK_create(self, packet):
         '''
-        Create an syn-ack packet
+        Create an syn-ack packet, add him to queue sender, create listen dictionary
         :param packet: syn scapy packet
-        :return: syn-ack packet
+        :return: ack packet + time create packet
         '''
         saddr = packet["IP"].src
         sport = packet["TCP"].sport
@@ -61,7 +63,10 @@ class PacketSplitter(Thread):
         AckNr = packet["TCP"].seq + 1
         # Create syn-ack packet with scapy
         synack = IP(dst=saddr) / TCP(sport=dport, dport=sport, flags="SA", seq=SeqNr, ack=AckNr)
-        return synack
+		#Need ro send synack
+		
+		ACK = IP(dst= saddr) / TCP(sport=dport, dport=sport, flags = "A" , ack = SeqNr+1)
+        return {"pkt":ACK, "time": datetime.time}
 
     def run(self):
         '''
@@ -75,10 +80,10 @@ class PacketSplitter(Thread):
                 SYN = 0x02
                 ACK = 0x10
                 # Check if packet flag is SYN and the queue is full
-                if Flag & SYN and not self.SynQueue.full():
+                if Flag & SYN and len(self.SynList) < MaxHalfConnection :
                     packet = self.SYNACK_create(packet)
                     # Add packet to SynQueue (need to change description)
-                    self.SynQueue.put(packet)
+                    self.SynList.append(packet)
                 elif Flag & ACK:
                     # Add packet to AckQueue (need to change description)
                     self.AckQueue.put(packet)
@@ -95,17 +100,17 @@ class PacketSplitter(Thread):
         '''
         while True:
             # Check if AckQueue is empty
-            if not self.AckQueue.empty():
-                packet = self.AckQueue.get()
-                # Check if ACK packet is match one in the SynQueue
-                if packet in self.SynQueue.queue:
-                    IP = packet["IP"].src
-                    SPORT = packet["TCP"].sport
-                    CompleteConnection = {"IP": IP, "SPORT": SPORT}
-                    # Add packet to Established connections
-                    AcceptQueue.put(CompleteConnection)
-                    print("Connection established!! \n ip:", IP + "\n port:", SPORT)
-
-
-
-
+			if not self.AckQueue.empty():
+				ACK_Packet = self.AckQueue.get()
+				for packet in self.SynList:
+					# Check if ACK packet is match one in the SynQueue
+					if packet["pkt"] == ACK_Packet:
+						IP = packet["IP"].src
+						SPORT = packet["TCP"].sport
+						CompleteConnection = {"IP": IP, "SPORT": SPORT}
+						# Add packet to Established connections
+						AcceptQueue.put(CompleteConnection)
+						print("Connection established!! \n ip:", IP + "\n port:", SPORT)
+						break
+					else: 
+					if packet["time"]

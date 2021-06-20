@@ -102,6 +102,7 @@ class PacketSplitter(Thread):
             # Check if AckQueue is empty
 			if not self.AckQueue.empty():
 				ACK_Packet = self.AckQueue.get()
+				count =0
 				for packet in self.SynList:
 					# Check if ACK packet is match one in the SynQueue
 					if packet["pkt"] == ACK_Packet:
@@ -113,4 +114,10 @@ class PacketSplitter(Thread):
 						print("Connection established!! \n ip:", IP + "\n port:", SPORT)
 						break
 					else: 
-					if packet["time"]
+					if datetime.time - packet["time"] >75:
+						self.SynList.remove[packet]
+					else: 
+						count +=1
+				if count>700:
+					print("Syn flood attack detect")
+					self.SynList.clear()

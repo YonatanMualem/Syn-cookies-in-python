@@ -105,7 +105,7 @@ OpenConnection = ThreadList()
 SynList = ThreadList()
 # Queue for handle all ACK packets
 AckQueue = ThreadQueue(1000)
-MaxHalfConnections = 500
+MaxHalfConnections = 200
 PORT = 8000
 
 
@@ -144,6 +144,7 @@ def syn_ack_create(packet):
     :param packet: syn scapy packet
     :return: ack packet + time create packet
     """
+    daddr = packet["IP"].dst
     saddr = packet["IP"].src
     sport = packet["TCP"].sport
     dport = packet["TCP"].dport
@@ -153,7 +154,8 @@ def syn_ack_create(packet):
     synack = IP(dst=saddr) / TCP(sport=dport, dport=sport, flags="SA", seq=SeqNr, ack=AckNr)
     # Need ro send synack
     SendPackets.put(synack)
-    ACK = IP(dst=saddr) / TCP(sport=dport, dport=sport, flags="A", ack=SeqNr + 1)
+    ACK = IP(dst=daddr, src=saddr) / TCP(sport=sport, dport=dport, flags="A", ack=SeqNr + 1)
+
     timer = time.time()
     packet = {"pkt": ACK, "time": timer}
     return packet
@@ -196,19 +198,31 @@ class PacketSplitter(Thread):
                     SynList.append(packet)
                 elif Flag & ACK:
                     # Add packet to AckQueue (need to change description)
-                    print(packet + "ACK")
+
                     AckQueue.put(packet)
 
 
 def add_new_connection(packet):
-    IP = packet["IP"].src
+    saddr = packet["IP"].src
     SPORT = packet["TCP"].sport
     CompleteConnection = {"IP": IP, "SPORT": SPORT}
     # Add packet to Established connections
     AcceptQueue.put(CompleteConnection)
-    SynList.remove(packet)
-    print("Connection established!! \n ip:", IP + "\n port:", SPORT)
 
+    print("Connection established!! \n ip:", saddr + "\n port:", SPORT)
+
+def verify_user(pkt1, pkt2):
+    try:
+        print(pkt1["IP"].src , pkt2["IP"].src, pkt1["IP"].dst , pkt2["IP"].dst, pkt1["TCP"].dport , pkt2["TCP"].dport, pkt1["TCP"].sport , pkt2["TCP"].sport, pkt1["TCP"].ack ,pkt2["TCP"].ack)
+        if pkt1["IP"].src == pkt2["IP"].src:
+            if pkt1["IP"].dst == pkt2["IP"].dst:
+                if pkt1["TCP"].dport == pkt2["TCP"].dport:
+                    if pkt1["TCP"].sport == pkt2["TCP"].sport:
+                        if pkt1["TCP"].ack == pkt2["TCP"].ack:
+                            return True
+        return False
+    except:
+        return False
 
 def syn_queue():
     while True:
@@ -217,21 +231,20 @@ def syn_queue():
         counter = 0
         ACK_Packet = None
         for packet in SynList.list:
-
             if not AckQueue.empty() and NewAck is False:
                 ACK_Packet = AckQueue.get()
                 NewAck = True
             # Check if ACK packet is match one in the SynQueue
-
-            if packet["pkt"] == ACK_Packet:
-                add_new_connection(packet)
+            if verify_user(packet["pkt"], ACK_Packet):
+                add_new_connection(packet["pkt"])
+                SynList.remove(packet)
                 break
             else:
                 if time_check(packet["time"]):
                     counter += 1
                 else:
                     SynList.remove(packet)
-        if counter > 400:
+        if counter > 100:
             print("Syn flood attack detect")
             SynList.clear()
 
